@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --light: #ecf0f1;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background-color: var(--primary);
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .task-card {
+            border-left: 4px solid var(--accent);
+        }
+
+        .priority-high {
+            border-left: 4px solid var(--danger) !important;
+        }
+
+        .priority-medium {
+            border-left: 4px solid var(--warning) !important;
+        }
+
+        .priority-low {
+            border-left: 4px solid var(--success) !important;
+        }
+
+        .status-todo {
+            background-color: #f8f9fa;
+        }
+
+        .status-in-progress {
+            background-color: #e3f2fd;
+        }
+
+        .status-done {
+            background-color: #e8f5e9;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+            border-color: #2980b9;
+        }
+
+        .filter-section {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .task-modal .modal-content {
+            border-radius: 12px;
+        }
+
+        .due-date-badge {
+            font-size: 0.85rem;
+        }
+
+        .task-actions {
+            opacity: 1; /* Make always visible for easier use */
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+<!-- Navigation Bar -->
+<nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="#">
+            <i class="fas fa-tasks me-2"></i>Task Management System
+        </a>
+        <div>
+            <button class="btn btn-outline-light me-2" onclick="newTask()">
+                <i class="fas fa-plus me-1"></i> New Task
+            </button>
+            <button class="btn btn-outline-info" onclick="testConnection()">
+                <i class="fas fa-plug me-1"></i> Test Connection
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="alert alert-warning d-flex align-items-center mb-3">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <div>Checking backend connection...</div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section mb-4">
+        <div class="row">
+            <div class="col-md-3">
+                <label for="statusFilter" class="form-label">Status</label>
+                <select class="form-select" id="statusFilter">
+                    <option value="">All Statuses</option>
+                    <option value="TODO">To Do</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="DONE">Done</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="priorityFilter" class="form-label">Priority</label>
+                <select class="form-select" id="priorityFilter">
+                    <option value="">All Priorities</option>
+                    <option value="HIGH">High</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="LOW">Low</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="sortBy" class="form-label">Sort By</label>
+                <select class="form-select" id="sortBy">
+                    <option value="">Default</option>
+                    <option value="dueDateAsc">Due Date (Ascending)</option>
+                    <option value="dueDateDesc">Due Date (Descending)</option>
+                    <option value="priorityAsc">Priority (Ascending)</option>
+                    <option value="priorityDesc">Priority (Descending)</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100" onclick="applyFilters()">
+                    <i class="fas fa-filter me-1"></i> Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tasks List -->
+    <div id="tasksContainer" class="row">
+        <!-- Tasks will be loaded here dynamically -->
+        <div class="col-12 text-center">
+            <div class="spinner-border text-primary my-5" role="status">
+                <span class="visually-hidden">Loading tasks...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Modal (Create/Edit) -->
+<div class="modal fade task-modal" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskModalLabel">Create New Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <input type="hidden" id="taskId">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title *</label>
+                        <input type="text" class="form-control" id="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="dueDate" class="form-label">Due Date</label>
+                            <input type="date" class="form-control" id="dueDate">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority">
+                                <option value="HIGH">High</option>
+                                <option value="MEDIUM" selected>Medium</option>
+                                <option value="LOW">Low</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status">
+                                <option value="TODO" selected>To Do</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="DONE">Done</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveTask()">Save Task</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete this task? This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="deleteTask()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container for Notifications -->
+<div class="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // API Base URL - Update this to match your backend URL
+    const API_BASE_URL = 'http://localhost:8080/tasks';
+
+    // Global variables
+    let tasks = [];
+    let taskToDelete = null;
+    let taskModalInstance = null;
+    let deleteModalInstance = null;
+
+    // DOM Elements
+    const tasksContainer = document.getElementById('tasksContainer');
+    const connectionStatus = document.getElementById('connectionStatus');
+
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize modal instances
+        taskModalInstance = new bootstrap.Modal(document.getElementById('taskModal'));
+        deleteModalInstance = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+        // Test backend connection first
+        testConnection();
+    });
+
+    // Test backend connection
+    async function testConnection() {
+        try {
+            connectionStatus.innerHTML = '<i class="fas fa-sync-alt fa-spin me-2"></i>Testing connection to backend...';
+
+            const response = await fetch(API_BASE_URL);
+
+            if (response.ok) {
+                connectionStatus.className = 'alert alert-success d-flex align-items-center mb-3';
+                connectionStatus.innerHTML = '<i class="fas fa-check-circle me-2"></i><div>Connected to backend successfully!</div>';
+                loadTasks();
+            } else {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Connection test failed:', error);
+            connectionStatus.className = 'alert alert-danger d-flex align-items-center mb-3';
+            connectionStatus.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <div>
+                    Cannot connect to backend at ${API_BASE_URL}.
+                    <br><small>Make sure your Spring Boot application is running on port 8080.</small>
+                    <br><small>Check browser console for details (F12).</small>
+                </div>
+            `;
+
+            // Show error message in tasks container
+            tasksContainer.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <h4><i class="fas fa-unlink me-2"></i>Connection Error</h4>
+                        <p>Could not connect to the backend server at ${API_BASE_URL}.</p>
+                        <p>Please ensure:</p>
+                        <ul>
+                            <li>Your Spring Boot application is running</li>
+                            <li>It's running on port 8080</li>
+                            <li>CORS is properly configured in your backend</li>
+                        </ul>
+                        <button class="btn btn-primary" onclick="testConnection()">
+                            <i class="fas fa-sync-alt me-1"></i> Retry Connection
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.open('http://localhost:8080/test', '_blank')">
+                            <i class="fas fa-external-link-alt me-1"></i> Test Backend Directly
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // Load all tasks from the API
+    async function loadTasks() {
+        try {
+            showLoading();
+            const response = await fetch(API_BASE_URL);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            tasks = await response.json();
+            displayTasks(tasks);
+        } catch (error) {
+            console.error('Error loading tasks:', error);
+            showError('Failed to load tasks: ' + error.message);
+        }
+    }
+
+    // Apply filters to tasks
+    async function applyFilters() {
+        const status = document.getElementById('statusFilter').value;
+        const priority = document.getElementById('priorityFilter').value;
+        const sortBy = document.getElementById('sortBy').value;
+
+        let url = API_BASE_URL;
+        const params = [];
+
+        if (status) params.push(`status=${status}`);
+        if (priority) params.push(`priority=${priority}`);
+
+        if (sortBy === 'dueDateAsc') params.push('sortBy=dueDate&order=asc');
+        if (sortBy === 'dueDateDesc') params.push('sortBy=dueDate&order=desc');
+        if (sortBy === 'priorityAsc') params.push('sortBy=priority&order=asc');
+        if (sortBy === 'priorityDesc') params.push('sortBy=priority&order=desc');
+
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+
+        try {
+            showLoading();
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            tasks = await response.json();
+            displayTasks(tasks);
+        } catch (error) {
+            console.error('Error applying filters:', error);
+            showError('Failed to apply filters: ' + error.message);
+        }
+    }
+
+    // Display tasks in the UI
+    function displayTasks(tasks) {
+        if (tasks.length === 0) {
+            tasksContainer.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No tasks found</h4>
+                    <p>Create a new task to get started</p>
+                    <button class="btn btn-primary" onclick="newTask()">
+                        <i class="fas fa-plus me-1"></i> Create Task
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        tasksContainer.innerHTML = '';
+
+        tasks.forEach(task => {
+            const taskCard = createTaskCard(task);
+            tasksContainer.appendChild(taskCard);
+        });
+    }
+
+    // Show loading state
+    function showLoading() {
+        tasksContainer.innerHTML = `
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary my-5" role="status">
+                    <span class="visually-hidden">Loading tasks...</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Create a task card element
+    function createTaskCard(task) {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4 mb-4';
+
+        // Determine priority class and badge color
+        let priorityClass = '';
+        let priorityBadge = '';
+
+        switch(task.priority) {
+            case 'HIGH':
+                priorityClass = 'priority-high';
+                priorityBadge = '<span class="badge bg-danger">High Priority</span>';
+                break;
+            case 'MEDIUM':
+                priorityClass = 'priority-medium';
+                priorityBadge = '<span class="badge bg-warning text-dark">Medium Priority</span>';
+                break;
+            case 'LOW':
+                priorityClass = 'priority-low';
+                priorityBadge = '<span class="badge bg-success">Low Priority</span>';
+                break;
+        }
+
+        // Determine status class
+        let statusClass = '';
+        switch(task.status) {
+            case 'TODO':
+                statusClass = 'status-todo';
+                break;
+            case 'IN_PROGRESS':
+                statusClass = 'status-in-progress';
+                break;
+            case 'DONE':
+                statusClass = 'status-done';
+                break;
+        }
+
+        // Format date
+        const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date';
+        const dueDateBadge = task.dueDate ?
+            `<span class="due-date-badge badge bg-secondary">Due: ${dueDate}</span>` : '';
+
+        col.innerHTML = `
+            <div class="card task-card h-100 ${priorityClass} ${statusClass}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title">${task.title}</h5>
+                        <div class="task-actions">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editTask(${task.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="confirmDelete(${task.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="card-text">${task.description || 'No description'}</p>
+                </div>
+                <div class="card-footer bg-transparent d-flex justify-content-between">
+                    <div>
+                        ${priorityBadge}
+                        <span class="badge bg-info text-dark">${task.status.replace('_', ' ')}</span>
+                        ${dueDateBadge}
+                    </div>
+                    <small class="text-muted">Created: ${new Date(task.createdAt).toLocaleDateString()}</small>
+                </div>
+            </div>
+        `;
+
+        return col;
+    }
+
+    // Open modal to create a new task
+    function newTask() {
+        document.getElementById('taskModalLabel').textContent = 'Create New Task';
+        document.getElementById('taskForm').reset();
+        document.getElementById('taskId').value = '';
+        taskModalInstance.show();
+    }
+
+    // Open modal to edit an existing task
+    async function editTask(taskId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/${taskId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const task = await response.json();
+
+            document.getElementById('taskModalLabel').textContent = 'Edit Task';
+            document.getElementById('taskId').value = task.id;
+            document.getElementById('title').value = task.title;
+            document.getElementById('description').value = task.description || '';
+            document.getElementById('dueDate').value = task.dueDate || '';
+            document.getElementById('priority').value = task.priority;
+            document.getElementById('status').value = task.status;
+
+            taskModalInstance.show();
+        } catch (error) {
+            console.error('Error loading task for edit:', error);
+            showError('Failed to load task for editing: ' + error.message);
+        }
+    }
+
+    // Save task (create or update)
+    async function saveTask() {
+        const taskId = document.getElementById('taskId').value;
+        const title = document.getElementById('title').value;
+
+        if (!title) {
+            showError('Title is required');
+            return;
+        }
+
+        const taskData = {
+            title: title,
+            description: document.getElementById('description').value,
+            dueDate: document.getElementById('dueDate').value,
+            priority: document.getElementById('priority').value,
+            status: document.getElementById('status').value
+        };
+
+        try {
+            let response;
+            let method;
+            let url;
+
+            if (taskId) {
+                // Update existing task
+                method = 'PUT';
+                url = `${API_BASE_URL}/${taskId}`;
+            } else {
+                // Create new task
+                method = 'POST';
+                url = API_BASE_URL;
+            }
+
+            response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(taskData)
+            });
+
+            if (response.ok) {
+                taskModalInstance.hide();
+                loadTasks(); // Reload tasks to reflect changes
+                showSuccess(`Task ${taskId ? 'updated' : 'created'} successfully`);
+            } else {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
+            }
+        } catch (error) {
+            console.error('Error saving task:', error);
+            showError('Failed to save task: ' + error.message);
+        }
+    }
+
+    // Confirm task deletion
+    function confirmDelete(taskId) {
+        taskToDelete = taskId;
+        deleteModalInstance.show();
+    }
+
+    // Delete task
+    async function deleteTask() {
+        if (!taskToDelete) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/${taskToDelete}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                deleteModalInstance.hide();
+                loadTasks(); // Reload tasks to reflect changes
+                showSuccess('Task deleted successfully');
+            } else {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Error deleting task:', error);
+            showError('Failed to delete task: ' + error.message);
+        } finally {
+            taskToDelete = null;
+        }
+    }
+
+    // Show success message
+    function showSuccess(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-white bg-success';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-2"></i> ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+
+        document.querySelector('.toast-container').appendChild(toast);
+
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+
+    // Show error message
+    function showError(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-white bg-danger';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-circle me-2"></i> ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+
+        document.querySelector('.toast-container').appendChild(toast);
+
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+</script>
+</body>
+</html>
